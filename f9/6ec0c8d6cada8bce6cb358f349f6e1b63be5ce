@@ -1,0 +1,29 @@
+src/store/persist_store.cpp
+  s_b62a3cf94fdb58::t_0b4ae872e2cd3b 55-59
+src/store/volatile_store.cpp
+  s_b62a3cf94fdb58::t_0b4ae872e2cd3b 27-31
+tests/engine/test_index_engine.cpp
+  s_b62a3cf94fdb58::t_7b649f7a183f49 600-615,617
+  s_b62a3cf94fdb58::t_abbe0f0c851e67 624
+  s_b62a3cf94fdb58::t_055d42ee19f489 568-581,598
+  s_b62a3cf94fdb58::t_c8c30f4c9f2eae 599
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "f96ec0c8d6cada8bce6cb358f349f6e1b63be5ce",
+  "prompts": {},
+  "logical_commit_id": "f96ec0c8d6cada8bce6cb358f349f6e1b63be5ce",
+  "sessions": {
+    "s_b62a3cf94fdb58": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06a5e-1fbe-75e3-aaf2-45b384b274b6",
+        "model": "gpt-5.5"
+      },
+      "human_author": "zhangzhibiao <zhangzhibiao@bigo.sg>",
+      "total_additions": 431,
+      "total_deletions": 112
+    }
+  }
+}
