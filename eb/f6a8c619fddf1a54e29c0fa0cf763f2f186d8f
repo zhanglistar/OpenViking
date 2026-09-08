@@ -1,0 +1,31 @@
+src/index/detail/index_manager_impl.cpp
+  s_b62a3cf94fdb58::t_15a7f2cf0904aa 123,130-133,135,137
+src/index/detail/scalar/filter/filter_ops.cpp
+  s_b62a3cf94fdb58::t_d8fe9e05776bf9 723-726
+  s_b62a3cf94fdb58::t_594381ea8a90f5 939-940
+  s_b62a3cf94fdb58::t_0abf791ab8b5c8 912-914,916-918,921-927,932
+  s_b62a3cf94fdb58::t_f853a1ab13cb4b 944-953,955
+tests/engine/test_index_engine.cpp
+  s_b62a3cf94fdb58::t_994bd3560e8b62 646
+  s_b62a3cf94fdb58::t_fee1014e9d2c35 38-73,79,82-95
+  s_b62a3cf94fdb58::t_88af9c11d4d8ff 74-78,80-81
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "ebf6a8c619fddf1a54e29c0fa0cf763f2f186d8f",
+  "prompts": {},
+  "logical_commit_id": "ebf6a8c619fddf1a54e29c0fa0cf763f2f186d8f",
+  "sessions": {
+    "s_b62a3cf94fdb58": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06a5e-1fbe-75e3-aaf2-45b384b274b6",
+        "model": "gpt-5.5"
+      },
+      "human_author": "zhangzhibiao <zhangzhibiao@bigo.sg>",
+      "total_additions": 675,
+      "total_deletions": 165
+    }
+  }
+}
