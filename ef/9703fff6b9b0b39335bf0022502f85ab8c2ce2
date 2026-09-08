@@ -1,0 +1,27 @@
+src/index/detail/index_manager_impl.cpp
+  s_b62a3cf94fdb58::t_b1790be42f01e7 161-163,167-169
+tests/engine/test_index_engine.cpp
+  s_b62a3cf94fdb58::t_81f69c14b35cae 11,52-55,61-72
+  s_b62a3cf94fdb58::t_fa6adc2364fff2 39-51,56-60,73-85,636
+src/index/detail/scalar/filter/filter_ops.cpp
+  s_b62a3cf94fdb58::t_fa6adc2364fff2 903-905
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "ef9703fff6b9b0b39335bf0022502f85ab8c2ce2",
+  "prompts": {},
+  "logical_commit_id": "ef9703fff6b9b0b39335bf0022502f85ab8c2ce2",
+  "sessions": {
+    "s_b62a3cf94fdb58": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06a5e-1fbe-75e3-aaf2-45b384b274b6",
+        "model": "gpt-5.5"
+      },
+      "human_author": "zhangzhibiao <zhangzhibiao@bigo.sg>",
+      "total_additions": 780,
+      "total_deletions": 174
+    }
+  }
+}
