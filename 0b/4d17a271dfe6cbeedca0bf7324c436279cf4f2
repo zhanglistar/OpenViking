@@ -1,0 +1,24 @@
+tests/engine/test_index_engine.cpp
+  s_b62a3cf94fdb58::t_dbdbe158204c9a 4,39-59,610
+src/index/detail/scalar/bitmap_holder/ranged_map.cpp
+  s_b62a3cf94fdb58::t_1ada2c285aad1e 326-332
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.22",
+  "base_commit_sha": "0b4d17a271dfe6cbeedca0bf7324c436279cf4f2",
+  "prompts": {},
+  "logical_commit_id": "0b4d17a271dfe6cbeedca0bf7324c436279cf4f2",
+  "sessions": {
+    "s_b62a3cf94fdb58": {
+      "agent_id": {
+        "tool": "codex",
+        "id": "01a06a5e-1fbe-75e3-aaf2-45b384b274b6",
+        "model": "gpt-5.5"
+      },
+      "human_author": "zhangzhibiao <zhangzhibiao@bigo.sg>",
+      "total_additions": 1042,
+      "total_deletions": 211
+    }
+  }
+}
