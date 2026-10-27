@@ -1048,12 +1048,21 @@ impl HttpClient {
                         .to_string(),
                 )
             })?;
-        self.wait_for_resource_task(
-            task_id,
-            tokio::signal::ctrl_c(),
-            std::time::Duration::from_secs(1),
-        )
-        .await
+        let mut result = self
+            .wait_for_resource_task(
+                task_id,
+                tokio::signal::ctrl_c(),
+                std::time::Duration::from_secs(1),
+            )
+            .await?;
+        if let Some(profile) = submitted.get("profile").and_then(Value::as_array) {
+            let mut profile = profile.clone();
+            if let Some(completion) = result.get("profile").and_then(Value::as_array) {
+                profile.extend(completion.iter().cloned());
+            }
+            result["profile"] = json!(profile);
+        }
+        Ok(result)
     }
 
     /// Wait without an overall deadline. Each status GET retains the ordinary
@@ -1132,6 +1141,9 @@ impl HttpClient {
                         // Return the task result plus task_id for inspection.
                         // The server's wait=true response omits this extra field.
                         result["task_id"] = json!(task_id);
+                        if let Some(profile) = task.get("profile").filter(|p| !p.is_null()) {
+                            result["profile"] = profile.clone();
+                        }
                         return Ok(result);
                     }
                     Some("cancelled") => {
@@ -1148,7 +1160,13 @@ impl HttpClient {
                     Some("failed") => {
                         let result = &task["result"];
                         return Err(Error::Api {
-                            code: result["code"].as_str().map(str::to_string),
+                            code: Some(
+                                result["code"]
+                                    .as_str()
+                                    .filter(|code| !code.is_empty())
+                                    .unwrap_or("PROCESSING_ERROR")
+                                    .to_string(),
+                            ),
                             message: format!(
                                 "Task {task_id} failed: {}",
                                 task["error"]

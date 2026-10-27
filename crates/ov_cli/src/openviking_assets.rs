@@ -778,6 +778,11 @@ pub async fn apply_manifest_core<S: Submitter>(
                 emit(done);
             }
             Err(err) => {
+                if err.code() == "INTERRUPTED" {
+                    // Save earlier assets, but never mask Ctrl+C with a state-write error.
+                    let _ = state.save();
+                    return Err(err);
+                }
                 let message = err.to_string();
                 entry.status = "failed".to_string();
                 entry.error = Some(message.clone());
@@ -1430,6 +1435,7 @@ mod tests {
     struct FakeSubmitter {
         preflight_fail_names: Vec<&'static str>,
         fail_names: Vec<&'static str>,
+        interrupt_name: Option<&'static str>,
         preflight_calls: Mutex<Vec<PreflightCall>>,
         calls: Mutex<Vec<SubmitCall>>,
     }
@@ -1439,6 +1445,7 @@ mod tests {
             Self {
                 preflight_fail_names: Vec::new(),
                 fail_names,
+                interrupt_name: None,
                 preflight_calls: Mutex::new(Vec::new()),
                 calls: Mutex::new(Vec::new()),
             }
@@ -1448,6 +1455,7 @@ mod tests {
             Self {
                 preflight_fail_names,
                 fail_names: Vec::new(),
+                interrupt_name: None,
                 preflight_calls: Mutex::new(Vec::new()),
                 calls: Mutex::new(Vec::new()),
             }
@@ -1484,6 +1492,14 @@ mod tests {
                 .lock()
                 .unwrap()
                 .push((asset.name.clone(), to, watch_interval, args));
+            if self.interrupt_name == Some(asset.name.as_str()) {
+                return Err(Error::Api {
+                    code: Some("INTERRUPTED".into()),
+                    message: "Stopped waiting".into(),
+                    details: Some(json!({"task_id": "task-beta"})),
+                    status: None,
+                });
+            }
             if self.fail_names.contains(&asset.name.as_str()) {
                 return Err(client_err(format!("boom: {}", asset.name)));
             }
@@ -1728,6 +1744,48 @@ mod tests {
         let submitter = FakeSubmitter::new(vec!["alpha", "beta", "gamma"]);
         let (summary, _) = run(&manifest, &catalog, &assets, &creds, &opts, &submitter).await;
         assert!(summary.all_failed());
+    }
+
+    #[tokio::test]
+    async fn interrupt_preserves_earlier_state_and_propagates_even_if_save_fails() {
+        for save_fails in [false, true] {
+            let (dir, manifest, catalog, assets) = workspace();
+            if save_fails {
+                std::fs::create_dir(state_path_for(&manifest).with_extension("json.tmp")).unwrap();
+            }
+            let mut submitter = FakeSubmitter::new(vec![]);
+            submitter.interrupt_name = Some("beta");
+            let mut events = Vec::new();
+            let error = apply_manifest_core(
+                &manifest,
+                &catalog,
+                &assets,
+                &dir.path().join("no-creds.yaml"),
+                &ManifestRunOptions {
+                    skip_failed: true,
+                    wait: true,
+                    ..run_opts()
+                },
+                &submitter,
+                &mut |event| events.push(event),
+            )
+            .await
+            .unwrap_err();
+            assert_eq!(error.code(), "INTERRUPTED");
+            match error {
+                Error::Api { details, .. } => {
+                    assert_eq!(details.unwrap()["task_id"], "task-beta");
+                }
+                other => panic!("{other}"),
+            }
+            assert_eq!(submitter.calls.lock().unwrap().len(), 2);
+            assert!(!events.iter().any(|event| event["event"] == "asset_failed"));
+            if !save_fails {
+                let state = load_state(&manifest).unwrap();
+                assert_eq!(state.assets.len(), 1);
+                assert_eq!(state.assets.values().next().unwrap().name, "alpha");
+            }
+        }
     }
 
     #[tokio::test]

@@ -301,6 +301,83 @@ async fn failed_tasks_are_terminal() {
 }
 
 #[tokio::test]
+async fn failed_tasks_without_a_code_keep_processing_error() {
+    for result in [Value::Null, json!({}), json!({"code": ""})] {
+        let (client, peer) = server(vec![(
+            200,
+            json!({"status":"ok","result":{
+                "status":"failed", "error":"embedding failed", "result":result
+            }}),
+            0,
+        )])
+        .await;
+        let error = bounded(client.wait_for_resource_task(
+            "task-import",
+            std::future::pending(),
+            Duration::from_millis(1),
+        ))
+        .await
+        .unwrap_err();
+        assert_eq!(error.code(), "PROCESSING_ERROR");
+        assert!(error.to_string().contains("embedding failed"));
+        assert_eq!(bounded(peer).await.unwrap().len(), 1);
+    }
+}
+
+#[tokio::test]
+async fn wait_preserves_submission_and_completion_profiles() {
+    for (enabled, submission_profile, completion_profile) in [
+        (true, true, true),
+        (true, true, false),
+        (true, false, true),
+        (true, false, false),
+        (false, false, false),
+    ] {
+        let submission = json!({"name":"submit","duration_ms":1});
+        let completion = json!({"name":"status","duration_ms":2});
+        let (mut client, peer) = server(vec![
+            (
+                200,
+                json!({"status":"ok","result":{"task_id":"task-import"},
+                    "profile":if submission_profile { json!([submission.clone()]) } else { Value::Null }}),
+                0,
+            ),
+            (
+                200,
+                json!({"status":"ok","result":{"status":"completed","result":{"context_count":10}},
+                    "profile":if completion_profile { json!([completion.clone()]) } else { Value::Null }}),
+                0,
+            ),
+        ])
+        .await;
+        client.base.profile_enabled = enabled;
+        let result = submit(&client, "https://example.com/docs", None, true)
+            .await
+            .unwrap();
+        if submission_profile || completion_profile {
+            let mut expected = Vec::new();
+            if submission_profile {
+                expected.push(submission);
+            }
+            if completion_profile {
+                expected.push(completion);
+            }
+            assert_eq!(result["profile"], json!(expected));
+        } else {
+            assert!(result.get("profile").is_none());
+        }
+        let requests = bounded(peer).await.unwrap();
+        assert_eq!(requests.len(), 2);
+        for request in requests {
+            assert_eq!(
+                request.lines().next().unwrap().contains("profile=1"),
+                enabled
+            );
+        }
+    }
+}
+
+#[tokio::test]
 async fn cancelled_tasks_surface_a_cancelled_code() {
     // 使用 mark_cancelled 的真实响应形状：result 和 error 均为空。
     let (client, peer) = server(vec![(

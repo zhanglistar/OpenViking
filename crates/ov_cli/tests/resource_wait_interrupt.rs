@@ -34,6 +34,95 @@ async fn read_request(stream: &mut tokio::net::TcpStream) -> String {
 }
 
 #[tokio::test]
+async fn manifest_ctrl_c_stops_before_second_asset_even_with_skip_failed() {
+    timeout(Duration::from_secs(20), async {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}", listener.local_addr().unwrap());
+        let (status_tx, status_rx) = oneshot::channel();
+        let (finish_tx, finish_rx) = oneshot::channel();
+        let server = tokio::spawn(async move {
+            let assets: Vec<_> = ["alpha", "beta"].into_iter().map(|name| json!({
+                "name":name, "connector":"git", "to":null,
+                "repo_url":format!("https://example.com/{name}.git"),
+                "branch":null, "commit":null, "auth_ref":null,
+                "watch_interval":0.0, "locator":format!("example.com/{name}"),
+                "git_ref":"HEAD", "asset_id":name
+            })).collect();
+            for (path, result) in [
+                ("/api/v1/openviking-assets/resolve", json!({"assets":assets})),
+                ("/api/v1/openviking-assets/preflight", json!({"accessible":true})),
+                ("/api/v1/openviking-assets/preflight", json!({"accessible":true})),
+                ("/api/v1/resources", json!({"task_id":"task-alpha"})),
+            ] {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                let request = read_request(&mut socket).await;
+                assert!(request.starts_with(&format!("POST {path} HTTP")), "{request}");
+                if path == "/api/v1/resources" {
+                    let body: serde_json::Value = serde_json::from_str(
+                        request.split("\r\n\r\n").nth(1).unwrap()).unwrap();
+                    assert_eq!(body["wait"], false);
+                    assert!(request.contains("alpha.git"));
+                }
+                let response = json!({"status":"ok","result":result}).to_string();
+                socket.write_all(format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{response}",
+                    response.len()
+                ).as_bytes()).await.unwrap();
+            }
+            let (mut status, _) = listener.accept().await.unwrap();
+            assert!(read_request(&mut status).await.starts_with("GET /api/v1/tasks/task-alpha"));
+            status_tx.send(()).unwrap();
+            // A regressed CLI tries to submit beta here and blocks on its reply.
+            finish_rx.await.unwrap();
+            let listener = listener.into_std().unwrap();
+            assert!(matches!(listener.accept(), Err(e) if e.kind() == std::io::ErrorKind::WouldBlock),
+                "CLI must neither submit beta nor cancel alpha");
+        });
+        let dir = tempfile::tempdir().unwrap();
+        let manifest = dir.path().join("assets.yaml");
+        std::fs::write(&manifest, "protocol: openviking-assets/1\ncatalog: []\n").unwrap();
+        std::fs::write(dir.path().join("ovcli.conf"),
+            json!({"url":url,"output":"json"}).to_string()).unwrap();
+        std::fs::create_dir(dir.path().join(".openviking")).unwrap();
+        std::fs::write(dir.path().join(".openviking/ovcli.settings.conf"),
+            json!({"language":"en"}).to_string()).unwrap();
+        let mut child = Command::new(env!("CARGO_BIN_EXE_ov"))
+            .env("HOME", dir.path())
+            .env("OPENVIKING_CLI_CONFIG_FILE", dir.path().join("ovcli.conf"))
+            .env("OPENVIKING_ASSETS_CREDENTIALS_FILE", dir.path().join("no-creds.yaml"))
+            .env("OPENVIKING_LANG", "en")
+            .env("NO_COLOR", "1")
+            .args(["add-resource", "-m", manifest.to_str().unwrap(),
+                "--wait", "--args", "skip_failed:true"])
+            .stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped())
+            .kill_on_drop(true).spawn().unwrap();
+        tokio::select! {
+            ready = status_rx => ready.unwrap(),
+            _ = child.wait() => {
+                let output = child.wait_with_output().await.unwrap();
+                panic!("manifest CLI exited before polling: {output:?}");
+            }
+        }
+        assert!(Command::new("kill").args(["-INT", &child.id().unwrap().to_string()])
+            .status().await.unwrap().success());
+        let output = timeout(Duration::from_secs(5), child.wait_with_output())
+            .await.expect("manifest must exit promptly on Ctrl+C").unwrap();
+        assert_eq!(output.status.code(), Some(130), "{output:?}");
+        let stderr = String::from_utf8(output.stderr).unwrap();
+        let envelope: serde_json::Value = serde_json::from_str(&stderr).unwrap();
+        assert_eq!(envelope["error"]["code"], "INTERRUPTED");
+        assert_eq!(envelope["error"]["details"]["task_id"], "task-alpha");
+        let stdout = String::from_utf8(output.stdout).unwrap();
+        assert!(!stdout.contains("asset_failed"), "{stdout}");
+        let events: Vec<serde_json::Value> = stdout.lines()
+            .map(|line| serde_json::from_str(line).unwrap()).collect();
+        assert_eq!(events.iter().filter(|event| event["event"] == "asset_start").count(), 1);
+        finish_tx.send(()).unwrap();
+        server.await.unwrap();
+    }).await.expect("manifest SIGINT integration test exceeded 20s");
+}
+
+#[tokio::test]
 async fn ctrl_c_exits_130_without_cancelling_server_task() {
     timeout(Duration::from_secs(20), async {
         for (config_output, cli_output) in [("table", None), ("table", Some("json")), ("json", None)] {
